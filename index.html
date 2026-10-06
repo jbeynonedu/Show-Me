@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Show Me</title>
+<style>
+  :root { --ink:#14213d; --muted:#5c677d; --line:#d5dbe6; --bg:#f3f5f9; --card:#fff; --accent:#1f5fd1; --good:#1a7f37; --bad:#b42318; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); font-size:18px; line-height:1.4; }
+  main { max-width:560px; margin:0 auto; padding:20px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; margin-top:16px; }
+  label { display:block; font-size:15px; color:var(--muted); margin-bottom:6px; }
+  input, textarea { width:100%; font:inherit; color:inherit; padding:12px 14px; border:2px solid var(--line); border-radius:10px; background:#fff; }
+  input:focus, textarea:focus { outline:none; border-color:var(--accent); }
+  #code { font-size:32px; letter-spacing:.3em; text-align:center; text-transform:uppercase; font-weight:700; }
+  textarea { min-height:140px; resize:vertical; }
+  button { font:inherit; font-weight:600; border:0; border-radius:10px; padding:14px 18px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .primary { background:var(--accent); color:#fff; width:100%; margin-top:14px; }
+  .opt { display:block; width:100%; text-align:left; background:#fff; border:2px solid var(--line); color:var(--ink); margin-bottom:10px; font-weight:500; }
+  .opt.sel { border-color:var(--accent); background:#e9f0fd; }
+  .me { display:flex; align-items:center; justify-content:space-between; }
+  .num { background:var(--ink); color:#fff; border-radius:12px; padding:6px 16px; font-size:26px; font-weight:800; }
+  .small { font-size:15px; color:var(--muted); }
+  #question { font-size:22px; font-weight:650; margin:0 0 16px; white-space:pre-wrap; }
+  #status { margin-top:12px; font-size:16px; color:var(--muted); min-height:1.4em; }
+  #result { margin-top:12px; padding:12px 14px; border-radius:10px; font-weight:600; }
+  #result.good { background:#e6f4ea; color:var(--good); }
+  #result.bad { background:#fdecea; color:var(--bad); }
+  #result.info { background:#eef1f6; color:var(--ink); }
+  #joinMsg { margin-top:12px; min-height:1.4em; color:var(--bad); font-size:16px; }
+</style>
+</head>
+<body>
+<main>
+  <section id="join">
+    <h1>Show Me</h1>
+    <div class="small">Enter the code on the board.</div>
+    <div class="card">
+      <label for="code">Class code</label>
+      <input id="code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <button id="joinBtn" class="primary" disabled>Join</button>
+      <div id="joinMsg"></div>
+    </div>
+  </section>
+
+  <section id="board" hidden>
+    <div class="me">
+      <div><h1>Show Me</h1><div class="small">Your answers show on the board under your number only.</div></div>
+      <div class="num">#<span id="num"></span></div>
+    </div>
+    <div class="card" id="waiting">Waiting for a question…</div>
+    <div class="card" id="qCard" hidden>
+      <p id="question"></p>
+      <div id="answer"></div>
+      <button id="sendBtn" class="primary">Send</button>
+      <div id="status"></div>
+      <div id="result" hidden></div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getDatabase, ref, get, set, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCA161TIMDG1SEZmYeegTQzDtKn5KLtaas",
+  authDomain: "show-me-72fd1.firebaseapp.com",
+  databaseURL: "https://show-me-72fd1-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "show-me-72fd1",
+  storageBucket: "show-me-72fd1.firebasestorage.app",
+  messagingSenderId: "316015008588",
+  appId: "1:316015008588:web:729e9e5763a9c79ffd8de9"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+const $ = id => document.getElementById(id);
+const LS = 'showme_code';
+const norm = s => String(s).trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.!?]+$/, '');
+const isCorrect = (v, a) => a.split('|').map(norm).includes(norm(v));
+
+let uid = null, code = null, state = null, curQn = null, choice = null, sent = null, stop = null;
+
+function view(name) { $('join').hidden = name !== 'join'; $('board').hidden = name !== 'board'; }
+
+signInAnonymously(auth).then(c => {
+  uid = c.user.uid;
+  $('joinBtn').disabled = false;
+  const saved = new URLSearchParams(location.search).get('code') || localStorage.getItem(LS);
+  if (saved) { $('code').value = saved.toUpperCase(); join(); }
+}).catch(() => { $('joinMsg').textContent = 'Could not connect. Check your internet and reload.'; });
+
+$('joinBtn').onclick = join;
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
+$('sendBtn').onclick = send;
+
+async function join() {
+  const c = $('code').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!c || !uid) return;
+  $('joinMsg').textContent = 'Joining…';
+  try {
+    const s = await get(ref(db, `sessions/${c}/state`));
+    if (!s.exists()) { localStorage.removeItem(LS); $('joinMsg').textContent = 'Code not found. Check the board and try again.'; return; }
+    let num;
+    const mine = await get(ref(db, `sessions/${c}/students/${uid}`));
+    if (mine.exists()) num = mine.val();
+    else {
+      const t = await runTransaction(ref(db, `sessions/${c}/counter`), n => (n || 0) + 1);
+      num = t.snapshot.val();
+      await set(ref(db, `sessions/${c}/students/${uid}`), num);
+    }
+    code = c;
+    localStorage.setItem(LS, c);
+    $('num').textContent = num;
+    $('joinMsg').textContent = '';
+    view('board');
+    if (stop) stop();
+    stop = onValue(ref(db, `sessions/${c}/state`), snap => render(snap.val()), () => ended());
+  } catch (e) {
+    $('joinMsg').textContent = 'Could not join. Try again.';
+  }
+}
+
+function ended() {
+  if (stop) { stop(); stop = null; }
+  localStorage.removeItem(LS);
+  code = null; state = null; curQn = null;
+  $('code').value = '';
+  $('joinMsg').textContent = 'That session has ended.';
+  view('join');
+}
+
+async function render(st) {
+  if (!st) { ended(); return; }
+  state = st;
+  if (!st.qn) { $('waiting').hidden = false; $('qCard').hidden = true; return; }
+  $('waiting').hidden = true; $('qCard').hidden = false;
+  if (st.qn !== curQn) {
+    const qn = st.qn;
+    curQn = qn; sent = null; choice = null;
+    $('question').textContent = st.text || '';
+    build(st);
+    try {
+      const r = await get(ref(db, `sessions/${code}/responses/q${qn}/${uid}`));
+      if (curQn === qn && r.exists()) { sent = r.val().v; fill(sent); }
+    } catch (e) {}
+  }
+  status();
+}
+
+function build(st) {
+  const box = $('answer');
+  box.replaceChildren();
+  if (st.type === 'mc') {
+    (st.options || []).forEach(o => {
+      const b = document.createElement('button');
+      b.className = 'opt'; b.textContent = o;
+      b.onclick = () => { if (state.locked) return; choice = o; mark(); };
+      box.append(b);
+    });
+  } else {
+    const ta = document.createElement('textarea');
+    ta.id = 'ta'; ta.maxLength = 500; ta.placeholder = 'Type your answer';
+    box.append(ta);
+  }
+}
+
+function mark() {
+  document.querySelectorAll('.opt').forEach(b => b.classList.toggle('sel', b.textContent === choice));
+}
+
+function fill(v) {
+  if (state.type === 'mc') { choice = v; mark(); }
+  else if ($('ta')) $('ta').value = v;
+}
+
+async function send() {
+  const v = state.type === 'mc' ? choice : ($('ta') ? $('ta').value.trim() : '');
+  if (!v) { $('status').textContent = 'Add an answer first.'; return; }
+  try {
+    await set(ref(db, `sessions/${code}/responses/q${curQn}/${uid}`), { v, t: Date.now() });
+    sent = v;
+    status();
+  } catch (e) {
+    $('status').textContent = 'Could not send. Answers may be locked.';
+  }
+}
+
+function status() {
+  const locked = !!state.locked;
+  $('sendBtn').disabled = locked;
+  $('sendBtn').textContent = sent ? 'Update answer' : 'Send';
+  document.querySelectorAll('.opt').forEach(b => b.disabled = locked);
+  if ($('ta')) $('ta').disabled = locked;
+  $('status').textContent = locked ? 'Answers are locked.' : (sent ? 'Sent. You can change it until answers are locked.' : '');
+  const res = $('result');
+  if (state.answer) {
+    const shown = String(state.answer).split('|').map(s => s.trim()).join(' or ');
+    res.hidden = false;
+    if (!sent) { res.className = 'info'; res.textContent = 'Answer: ' + shown; }
+    else if (isCorrect(sent, String(state.answer))) { res.className = 'good'; res.textContent = 'Correct. Answer: ' + shown; }
+    else { res.className = 'bad'; res.textContent = 'Not this time. Answer: ' + shown; }
+  } else res.hidden = true;
+}
+</script>
+</body>
+</html>

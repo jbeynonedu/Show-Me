@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Show Me · Host</title>
+<style>
+  :root { --ink:#14213d; --muted:#5c677d; --line:#d5dbe6; --bg:#f3f5f9; --card:#fff; --accent:#1f5fd1; --good:#1a7f37; --bad:#b42318; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); font-size:17px; line-height:1.4; }
+  header { display:flex; align-items:center; gap:16px; padding:10px 20px; background:var(--ink); color:#fff; flex-wrap:wrap; }
+  header .brand { font-weight:800; font-size:19px; }
+  nav { display:flex; gap:6px; }
+  nav button { background:transparent; color:#cfd6e4; padding:8px 14px; }
+  nav button.on { background:#fff; color:var(--ink); }
+  header .sess { margin-left:auto; display:flex; align-items:center; gap:12px; font-size:15px; }
+  button { font:inherit; font-weight:600; border:0; border-radius:9px; padding:10px 16px; cursor:pointer; background:#e4e8f0; color:var(--ink); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:var(--accent); color:#fff; }
+  button.danger { background:#fdecea; color:var(--bad); }
+  button.big { font-size:20px; padding:16px 28px; }
+  section { padding:20px; max-width:1500px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:16px; }
+  h2 { font-size:18px; margin:0 0 12px; }
+  label { display:block; font-size:14px; color:var(--muted); margin:12px 0 5px; }
+  input[type=text], textarea, select { width:100%; font:inherit; color:inherit; padding:10px 12px; border:2px solid var(--line); border-radius:9px; background:#fff; }
+  input:focus, textarea:focus, select:focus { outline:none; border-color:var(--accent); }
+  textarea { min-height:80px; resize:vertical; }
+  .hint { font-size:14px; color:var(--muted); }
+  .setup { display:grid; grid-template-columns:minmax(300px, 420px) 1fr; gap:16px; align-items:start; }
+  @media (max-width:860px) { .setup { grid-template-columns:1fr; } }
+  .qrow { display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-top:1px solid var(--line); }
+  .qrow:first-of-type { border-top:0; }
+  .qrow .body { flex:1; min-width:0; }
+  .qrow .meta { font-size:14px; color:var(--muted); }
+  .qrow .acts { display:flex; gap:6px; }
+  .qrow button { padding:6px 10px; font-size:14px; }
+  .radio { display:flex; gap:18px; }
+  .radio label { display:flex; align-items:center; gap:6px; margin:0; color:var(--ink); font-size:16px; }
+  .empty { text-align:center; padding:60px 20px; }
+  .joinbar { display:flex; flex-wrap:wrap; gap:10px 36px; align-items:baseline; font-size:26px; background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 22px; margin-bottom:14px; }
+  .joinbar b { font-weight:800; }
+  #joinCode { font-size:40px; letter-spacing:.14em; color:var(--accent); }
+  #joined { margin-left:auto; font-size:20px; color:var(--muted); }
+  .askbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .askbar select { flex:2; min-width:220px; width:auto; }
+  .askbar input { flex:2; min-width:220px; width:auto; }
+  #pText { font-size:36px; line-height:1.25; margin:6px 0 10px; white-space:pre-wrap; }
+  #pAnswer { font-size:24px; font-weight:700; color:var(--good); margin-bottom:10px; }
+  .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+  #count { margin-left:auto; font-size:20px; color:var(--muted); }
+  #tally { margin-bottom:14px; }
+  .bar { display:grid; grid-template-columns:minmax(120px, 30%) 1fr 48px; gap:12px; align-items:center; font-size:20px; margin-bottom:8px; }
+  .bar .track { background:#e4e8f0; border-radius:8px; height:26px; overflow:hidden; }
+  .bar .fill { background:var(--accent); height:100%; }
+  .bar.good .fill { background:var(--good); }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
+  #grid.chips { grid-template-columns:repeat(auto-fill, minmax(72px, 1fr)); }
+  .chip { text-align:center; padding:14px 0; border-radius:12px; background:#e4e8f0; color:#8a94a6; font-size:22px; font-weight:800; }
+  .chip.done { background:var(--ink); color:#fff; }
+  .resp { background:#fff; border:2px solid var(--line); border-radius:12px; padding:12px 14px; position:relative; cursor:pointer; }
+  .resp .n { font-weight:800; color:var(--accent); font-size:18px; }
+  .resp .v { font-size:22px; white-space:pre-wrap; overflow-wrap:anywhere; margin-top:4px; }
+  .resp .x { position:absolute; top:6px; right:6px; padding:2px 9px; font-size:15px; background:transparent; color:var(--muted); }
+  .resp.good { border-color:var(--good); background:#f0f9f2; }
+  .resp.bad { border-color:var(--bad); background:#fef4f3; }
+  #spot { position:fixed; inset:0; background:rgba(20,33,61,.92); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:6vw; cursor:pointer; z-index:10; }
+  #spotNum { font-size:36px; font-weight:800; opacity:.7; margin-bottom:18px; }
+  #spotText { font-size:clamp(32px, 4.5vw, 72px); line-height:1.25; white-space:pre-wrap; overflow-wrap:anywhere; text-align:center; max-height:75vh; overflow:auto; }
+  .sum h3 { margin:0 0 8px; font-size:20px; white-space:pre-wrap; }
+  .sum .pct { font-size:28px; font-weight:800; }
+  .sum .row { margin-top:6px; }
+  .sum .track { background:#e4e8f0; border-radius:8px; height:14px; overflow:hidden; margin:6px 0 10px; max-width:420px; }
+  .sum .fill { background:var(--good); height:100%; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Show Me</div>
+  <nav>
+    <button data-tab="setup">Setup</button>
+    <button data-tab="present">Present</button>
+    <button data-tab="summary">Summary</button>
+  </nav>
+  <div class="sess">
+    <span id="sessInfo"></span>
+    <button id="endBtn" class="danger" hidden>End session</button>
+  </div>
+</header>
+
+<section id="tab-setup" hidden>
+  <div class="setup">
+    <div class="card">
+      <h2 id="formTitle">Add a question</h2>
+      <label for="fText">Question</label>
+      <textarea id="fText"></textarea>
+      <label>Type</label>
+      <div class="radio">
+        <label><input type="radio" name="fType" value="text" checked> Short text</label>
+        <label><input type="radio" name="fType" value="mc"> Multiple choice</label>
+      </div>
+      <div id="fTextWrap">
+        <label for="fAns">Correct answer (optional)</label>
+        <input type="text" id="fAns">
+        <div class="hint">Leave blank for open questions. Separate alternatives with | e.g. valid|deductively valid</div>
+      </div>
+      <div id="fMcWrap" hidden>
+        <label for="fOpts">Options, one per line</label>
+        <textarea id="fOpts"></textarea>
+        <div class="hint">Put * in front of the correct option, e.g. *Modus ponens. No * means no set answer.</div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button id="fSave" class="primary">Add question</button>
+        <button id="fCancel" hidden>Cancel</button>
+      </div>
+      <div id="fMsg" class="hint" style="color:var(--bad); margin-top:8px;"></div>
+    </div>
+    <div class="card">
+      <h2>Question set</h2>
+      <div class="hint">Saved in this browser, so it is still here next lesson. Correct answers only show on this tab and the Summary tab.</div>
+      <div id="qList" style="margin-top:8px;"></div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-present" hidden>
+  <div id="noSess" class="empty">
+    <p id="noSessMsg">No session running.</p>
+    <button id="startBtn" class="primary big" disabled>Start session</button>
+  </div>
+  <div id="live" hidden>
+    <div class="joinbar">
+      <div>Go to <b id="joinUrl"></b></div>
+      <div>Code <b id="joinCode"></b></div>
+      <div id="joined"></div>
+    </div>
+    <div class="askbar">
+      <select id="pick"></select>
+      <button id="askBtn" class="primary">Ask</button>
+      <input type="text" id="quick" placeholder="Or type a quick question">
+      <button id="quickBtn">Ask quick</button>
+    </div>
+    <div id="pBox" hidden>
+      <div id="pText"></div>
+      <div id="pAnswer" hidden></div>
+      <div class="controls">
+        <button id="showBtn" class="primary">Show responses</button>
+        <button id="lockBtn">Lock answers</button>
+        <button id="revealBtn">Reveal answer</button>
+        <button id="unhideBtn" hidden>Restore removed</button>
+        <span id="count"></span>
+      </div>
+      <div id="tally"></div>
+      <div id="grid"></div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-summary" hidden>
+  <div id="sumList"></div>
+</section>
+
+<div id="spot" hidden><div id="spotNum"></div><div id="spotText"></div></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getDatabase, ref, get, set, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCA161TIMDG1SEZmYeegTQzDtKn5KLtaas",
+  authDomain: "show-me-72fd1.firebaseapp.com",
+  databaseURL: "https://show-me-72fd1-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "show-me-72fd1",
+  storageBucket: "show-me-72fd1.firebasestorage.app",
+  messagingSenderId: "316015008588",
+  appId: "1:316015008588:web:729e9e5763a9c79ffd8de9"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+const $ = id => document.getElementById(id);
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+const norm = s => String(s).trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.!?]+$/, '');
+const isCorrect = (v, a) => a.split('|').map(norm).includes(norm(v));
+const showAns = a => String(a).split('|').map(s => s.trim()).join(' or ');
+const short = (s, n = 70) => s.length > n ? s.slice(0, n - 1) + '…' : s;
+
+const LS_Q = 'showme_questions', LS_S = 'showme_session';
+const MAX_AGE = 12 * 60 * 60 * 1000;
+let questions = load(LS_Q, []);
+let sess = load(LS_S, null);          // { code, created, qn, log:{qn:question}, next }
+let uid = null, st = null, students = {}, responses = {};
+let shown = false, removed = new Set(), unsubs = [], editing = null;
+
+const joinUrl = (location.host + location.pathname).replace(/host\.html$/, '').replace(/\/$/, '');
+
+/* ---------- tabs ---------- */
+function tab(name) {
+  for (const t of ['setup', 'present', 'summary']) {
+    $('tab-' + t).hidden = t !== name;
+    document.querySelector(`[data-tab="${t}"]`).classList.toggle('on', t === name);
+  }
+  if (name === 'summary') renderSummary();
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => tab(b.dataset.tab));
+
+/* ---------- setup ---------- */
+function fType() { return document.querySelector('input[name=fType]:checked').value; }
+document.querySelectorAll('input[name=fType]').forEach(r => r.onchange = () => {
+  $('fMcWrap').hidden = fType() !== 'mc';
+  $('fTextWrap').hidden = fType() === 'mc';
+});
+
+function resetForm() {
+  editing = null;
+  $('fText').value = ''; $('fAns').value = ''; $('fOpts').value = ''; $('fMsg').textContent = '';
+  $('formTitle').textContent = 'Add a question';
+  $('fSave').textContent = 'Add question';
+  $('fCancel').hidden = true;
+}
+$('fCancel').onclick = resetForm;
+
+$('fSave').onclick = () => {
+  const text = $('fText').value.trim();
+  if (!text) { $('fMsg').textContent = 'Add the question text.'; return; }
+  const q = { text, type: fType(), options: null, answer: null };
+  if (q.type === 'mc') {
+    const lines = $('fOpts').value.split('\n').map(s => s.trim()).filter(Boolean);
+    q.options = lines.map(l => {
+      if (l.startsWith('*')) { l = l.slice(1).trim(); q.answer = l; }
+      return l;
+    }).filter(Boolean);
+    if (q.options.length < 2) { $('fMsg').textContent = 'Add at least two options.'; return; }
+  } else {
+    q.answer = $('fAns').value.trim() || null;
+  }
+  if (editing === null) questions.push(q); else questions[editing] = q;
+  save(LS_Q, questions);
+  resetForm(); renderSetup(); renderPick();
+};
+
+function editQ(i) {
+  const q = questions[i];
+  editing = i;
+  $('fText').value = q.text;
+  document.querySelector(`input[name=fType][value=${q.type}]`).checked = true;
+  $('fMcWrap').hidden = q.type !== 'mc';
+  $('fTextWrap').hidden = q.type === 'mc';
+  $('fAns').value = q.type === 'text' ? (q.answer || '') : '';
+  $('fOpts').value = q.type === 'mc' ? q.options.map(o => (o === q.answer ? '*' : '') + o).join('\n') : '';
+  $('formTitle').textContent = 'Edit question ' + (i + 1);
+  $('fSave').textContent = 'Save changes';
+  $('fCancel').hidden = false;
+  $('fText').focus();
+}
+
+function moveQ(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= questions.length) return;
+  [questions[i], questions[j]] = [questions[j], questions[i]];
+  save(LS_Q, questions); resetForm(); renderSetup(); renderPick();
+}
+
+function renderSetup() {
+  const list = $('qList');
+  list.replaceChildren();
+  if (!questions.length) { list.append(el('p', { class: 'hint', text: 'No questions yet. You can also ask quick questions from the Present tab without adding any here.' })); return; }
+  questions.forEach((q, i) => {
+    const meta = q.type === 'mc'
+      ? 'Multiple choice: ' + q.options.join(' / ') + (q.answer ? ' · Answer: ' + q.answer : ' · No set answer')
+      : 'Short text' + (q.answer ? ' · Answer: ' + showAns(q.answer) : ' · No set answer');
+    list.append(el('div', { class: 'qrow' },
+      el('div', { style: 'font-weight:800;', text: (i + 1) + '.' }),
+      el('div', { class: 'body' }, el('div', { text: q.text }), el('div', { class: 'meta', text: meta })),
+      el('div', { class: 'acts' },
+        el('button', { text: '↑', title: 'Move up', onclick: () => moveQ(i, -1) }),
+        el('button', { text: '↓', title: 'Move down', onclick: () => moveQ(i, 1) }),
+        el('button', { text: 'Edit', onclick: () => editQ(i) }),
+        el('button', { class: 'danger', text: 'Delete', onclick: () => { if (confirm('Delete this question?')) { questions.splice(i, 1); save(LS_Q, questions); resetForm(); renderSetup(); renderPick(); } } })
+      )
+    ));
+  });
+}
+
+/* ---------- session ---------- */
+function genCode() {
+  const a = 'BCDFGHJKLMNPQRSTVWXZ';
+  let c = '';
+  for (let i = 0; i < 4; i++) c += a[Math.floor(Math.random() * a.length)];
+  return c;
+}
+
+async function startSession() {
+  $('startBtn').disabled = true;
+  for (let i = 0; i < 6; i++) {
+    const code = genCode();
+    try {
+      await set(ref(db, 'sessions/' + code), { host: uid, created: Date.now(), state: { qn: 0, locked: false } });
+      sess = { code, created: Date.now(), qn: 0, log: {}, next: 0 };
+      save(LS_S, sess);
+      attach();
+      $('startBtn').disabled = false;
+      return;
+    } catch (e) { /* code taken or rules not published; try another */ }
+  }
+  $('startBtn').disabled = false;
+  $('noSessMsg').textContent = 'Could not start a session. Check the database rules are published and Anonymous sign-in is enabled in Firebase.';
+}
+$('startBtn').onclick = startSession;
+
+function detach() { unsubs.forEach(u => u()); unsubs = []; }
+
+function attach() {
+  detach();
+  st = null; students = {}; responses = {}; shown = false; removed = new Set();
+  const base = 'sessions/' + sess.code;
+  unsubs.push(onValue(ref(db, base + '/state'), s => { st = s.val(); renderPresent(); }));
+  unsubs.push(onValue(ref(db, base + '/students'), s => { students = s.val() || {}; renderPresent(); }));
+  unsubs.push(onValue(ref(db, base + '/responses'), s => { responses = s.val() || {}; renderPresent(); if (!$('tab-summary').hidden) renderSummary(); }));
+  renderPick(); renderPresent();
+}
+
+async function endSession() {
+  if (!sess) return;
+  if (!confirm('End this session? Student responses and the summary will be deleted.')) return;
+  detach();
+  try { await remove(ref(db, 'sessions/' + sess.code)); } catch (e) {}
+  sess = null; save(LS_S, null);
+  st = null; students = {}; responses = {};
+  renderPresent(); renderSummary();
+}
+$('endBtn').onclick = endSession;
+
+/* ---------- asking ---------- */
+function renderPick() {
+  const p = $('pick');
+  p.replaceChildren();
+  if (!questions.length) { p.append(el('option', { value: '', text: 'No saved questions (add some in Setup)' })); p.disabled = true; $('askBtn').disabled = true; return; }
+  p.disabled = false; $('askBtn').disabled = false;
+  questions.forEach((q, i) => p.append(el('option', { value: i, text: (i + 1) + '. ' + short(q.text) })));
+  p.value = String(Math.min(sess ? sess.next || 0 : 0, questions.length - 1));
+}
+
+async function ask(q) {
+  if (!sess) return;
+  const qn = (sess.qn || 0) + 1;
+  sess.qn = qn;
+  sess.log[qn] = q;
+  save(LS_S, sess);
+  shown = false; removed = new Set();
+  await set(ref(db, 'sessions/' + sess.code + '/state'), { qn, key: 'q' + qn, text: q.text, type: q.type, options: q.options || null, locked: false, answer: null });
+}
+
+$('askBtn').onclick = async () => {
+  const i = Number($('pick').value);
+  if (!questions[i]) return;
+  sess.next = i + 1;
+  await ask(questions[i]);
+  renderPick();
+};
+$('quickBtn').onclick = async () => {
+  const text = $('quick').value.trim() || 'Write your response.';
+  $('quick').value = '';
+  await ask({ text, type: 'text', options: null, answer: null });
+};
+$('quick').addEventListener('keydown', e => { if (e.key === 'Enter') $('quickBtn').click(); });
+
+$('showBtn').onclick = () => { shown = !shown; renderPresent(); };
+$('lockBtn').onclick = () => { if (st) update(ref(db, 'sessions/' + sess.code + '/state'), { locked: !st.locked }); };
+$('revealBtn').onclick = () => {
+  const q = sess.log[st.qn];
+  if (!q || !q.answer) return;
+  update(ref(db, 'sessions/' + sess.code + '/state'), { answer: st.answer ? null : q.answer, locked: true });
+};
+$('unhideBtn').onclick = () => { removed = new Set(); renderPresent(); };
+$('spot').onclick = () => { $('spot').hidden = true; };
+
+/* ---------- present ---------- */
+function current() {
+  const rs = (st && st.qn && responses['q' + st.qn]) || {};
+  const all = Object.entries(students).map(([u, n]) => ({ u, n, r: rs[u] || null })).sort((a, b) => a.n - b.n);
+  return { rs, all, answered: all.filter(x => x.r) };
+}
+
+function renderPresent() {
+  const live = !!sess;
+  $('noSess').hidden = live; $('live').hidden = !live; $('endBtn').hidden = !live;
+  $('sessInfo').textContent = live ? 'Code ' + sess.code : '';
+  if (!live) return;
+  $('joinUrl').textContent = joinUrl;
+  $('joinCode').textContent = sess.code;
+  const total = Object.keys(students).length;
+  $('joined').textContent = total + ' joined';
+
+  const asking = !!(st && st.qn);
+  $('pBox').hidden = !asking;
+  if (!asking) return;
+  const q = sess.log[st.qn] || {};
+  const { all, answered } = current();
+  $('pText').textContent = st.text || '';
+  $('pAnswer').hidden = !st.answer;
+  if (st.answer) $('pAnswer').textContent = 'Answer: ' + showAns(st.answer);
+  $('count').textContent = answered.length + ' of ' + total + ' answered';
+  $('showBtn').textContent = shown ? 'Hide responses' : 'Show responses';
+  $('lockBtn').textContent = st.locked ? 'Unlock answers' : 'Lock answers';
+  $('revealBtn').hidden = !q.answer;
+  $('revealBtn').textContent = st.answer ? 'Hide answer' : 'Reveal answer';
+  $('unhideBtn').hidden = !removed.size;
+
+  const tally = $('tally'), grid = $('grid');
+  tally.replaceChildren(); grid.replaceChildren();
+
+  if (!shown) {
+    grid.className = 'chips';
+    all.forEach(x => grid.append(el('div', { class: 'chip' + (x.r ? ' done' : ''), text: String(x.n) })));
+    return;
+  }
+  grid.className = '';
+  if (st.type === 'mc') {
+    (st.options || []).forEach(o => {
+      const c = answered.filter(x => x.r.v === o).length;
+      const pct = answered.length ? Math.round(100 * c / answered.length) : 0;
+      tally.append(el('div', { class: 'bar' + (st.answer && isCorrect(o, st.answer) ? ' good' : '') },
+        el('div', { text: o }),
+        el('div', { class: 'track' }, el('div', { class: 'fill', style: 'width:' + pct + '%' })),
+        el('div', { text: String(c) })
+      ));
+    });
+  }
+  answered.filter(x => !removed.has(x.u)).forEach(x => {
+    let cls = 'resp';
+    if (st.answer) cls += isCorrect(x.r.v, st.answer) ? ' good' : ' bad';
+    grid.append(el('div', { class: cls, title: 'Click to spotlight', onclick: () => { $('spotNum').textContent = '#' + x.n; $('spotText').textContent = x.r.v; $('spot').hidden = false; } },
+      el('button', { class: 'x', text: '✕', title: 'Remove from board', onclick: e => { e.stopPropagation(); removed.add(x.u); renderPresent(); } }),
+      el('div', { class: 'n', text: '#' + x.n }),
+      el('div', { class: 'v', text: x.r.v })
+    ));
+  });
+}
+
+/* ---------- summary ---------- */
+function renderSummary() {
+  const box = $('sumList');
+  box.replaceChildren();
+  const qns = sess ? Object.keys(sess.log).map(Number).sort((a, b) => a - b) : [];
+  if (!qns.length) { box.append(el('div', { class: 'card', text: 'Nothing asked yet. Each question you ask in a session will be summarised here.' })); return; }
+  const total = Object.keys(students).length;
+  qns.forEach(qn => {
+    const q = sess.log[qn];
+    const rs = responses['q' + qn] || {};
+    const list = Object.entries(rs).map(([u, r]) => ({ n: students[u] ?? '?', v: r.v }));
+    const card = el('div', { class: 'card sum' }, el('h3', { text: 'Q' + qn + '. ' + q.text }));
+    card.append(el('div', { class: 'hint', text: list.length + ' of ' + total + ' answered' }));
+    if (q.answer) {
+      const wrong = list.filter(x => !isCorrect(x.v, q.answer));
+      const pct = list.length ? Math.round(100 * (list.length - wrong.length) / list.length) : 0;
+      card.append(el('div', { class: 'row' }, el('span', { class: 'pct', text: pct + '%' }), ' correct'));
+      card.append(el('div', { class: 'track' }, el('div', { class: 'fill', style: 'width:' + pct + '%' })));
+      card.append(el('div', { class: 'row', text: 'Answer: ' + showAns(q.answer) }));
+      if (wrong.length) {
+        const groups = {};
+        wrong.forEach(x => { const k = norm(x.v); (groups[k] = groups[k] || { v: x.v, c: 0 }).c++; });
+        const top = Object.values(groups).sort((a, b) => b.c - a.c).slice(0, 4).map(g => short(g.v, 60) + ' (' + g.c + ')').join(' · ');
+        card.append(el('div', { class: 'row', text: 'Common wrong answers: ' + top }));
+        card.append(el('div', { class: 'row', text: 'Incorrect: ' + wrong.map(x => '#' + x.n).sort((a, b) => a.slice(1) - b.slice(1)).join(', ') }));
+      }
+    } else {
+      card.append(el('div', { class: 'row hint', text: 'No set answer, so nothing to mark.' }));
+    }
+    box.append(card);
+  });
+}
+
+/* ---------- boot ---------- */
+renderSetup(); renderPick(); renderPresent();
+tab(questions.length || sess ? 'present' : 'setup');
+
+signInAnonymously(auth).then(async c => {
+  uid = c.user.uid;
+  $('startBtn').disabled = false;
+  if (!sess) return;
+  if (Date.now() - sess.created > MAX_AGE) {
+    try { await remove(ref(db, 'sessions/' + sess.code)); } catch (e) {}
+    sess = null; save(LS_S, null); renderPresent(); return;
+  }
+  try {
+    const s = await get(ref(db, 'sessions/' + sess.code + '/state'));
+    if (s.exists()) attach(); else { sess = null; save(LS_S, null); renderPresent(); }
+  } catch (e) { sess = null; save(LS_S, null); renderPresent(); }
+}).catch(() => {
+  $('noSessMsg').textContent = 'Could not sign in. Check that Anonymous sign-in is enabled in Firebase Authentication.';
+});
+</script>
+</body>
+</html>
