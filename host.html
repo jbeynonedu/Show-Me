@@ -55,7 +55,7 @@
   .bar .track { background:#e4e8f0; border-radius:8px; height:26px; overflow:hidden; }
   .bar .fill { background:var(--accent); height:100%; }
   .bar.good .fill { background:var(--good); }
-  #grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
+  #grid, .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
   #grid.chips { grid-template-columns:repeat(auto-fill, minmax(72px, 1fr)); }
   .chip { text-align:center; padding:14px 0; border-radius:12px; background:#e4e8f0; color:#8a94a6; font-size:22px; font-weight:800; }
   .chip.done { background:var(--ink); color:#fff; }
@@ -68,6 +68,13 @@
   #spot { position:fixed; inset:0; background:rgba(20,33,61,.92); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:6vw; cursor:pointer; z-index:10; }
   #spotNum { font-size:36px; font-weight:800; opacity:.7; margin-bottom:18px; }
   #spotText { font-size:clamp(32px, 4.5vw, 72px); line-height:1.25; white-space:pre-wrap; overflow-wrap:anywhere; text-align:center; max-height:75vh; overflow:auto; }
+  #past { margin-top:28px; }
+  #past h2 { color:var(--muted); }
+  .pastq { font-size:24px; font-weight:650; white-space:pre-wrap; margin-bottom:8px; }
+  .pasta { font-size:19px; font-weight:700; color:var(--good); margin-bottom:8px; }
+  .sum .grid { margin-top:12px; }
+  .sum .resp { cursor:default; }
+  .sum .resp .v { font-size:18px; }
   .sum h3 { margin:0 0 8px; font-size:20px; white-space:pre-wrap; }
   .sum .pct { font-size:28px; font-weight:800; }
   .sum .row { margin-top:6px; }
@@ -154,6 +161,7 @@
       <div id="tally"></div>
       <div id="grid"></div>
     </div>
+    <div id="past"></div>
   </div>
 </section>
 
@@ -208,7 +216,7 @@ let sess = load(LS_S, null);          // { code, created, qn, log:{qn:question},
 let uid = null, st = null, students = {}, responses = {};
 let shown = false, removed = new Set(), unsubs = [], editing = null;
 
-const joinUrl = (location.host + location.pathname).replace(/host\.html$/, '').replace(/\/$/, '');
+const joinUrl = (location.host + location.pathname).replace(/host(\.html)?$/, '').replace(/\/$/, '');
 
 /* ---------- tabs ---------- */
 function tab(name) {
@@ -363,7 +371,7 @@ async function ask(q) {
   sess.qn = qn;
   sess.log[qn] = q;
   save(LS_S, sess);
-  shown = false; removed = new Set();
+  shown = false;
   await set(ref(db, 'sessions/' + sess.code + '/state'), { qn, key: 'q' + qn, text: q.text, type: q.type, options: q.options || null, locked: false, answer: null });
 }
 
@@ -386,12 +394,50 @@ $('lockBtn').onclick = () => { if (st) update(ref(db, 'sessions/' + sess.code + 
 $('revealBtn').onclick = () => {
   const q = sess.log[st.qn];
   if (!q || !q.answer) return;
+  sess.revealed = sess.revealed || {}; sess.revealed[st.qn] = true; save(LS_S, sess);
   update(ref(db, 'sessions/' + sess.code + '/state'), { answer: st.answer ? null : q.answer, locked: true });
 };
 $('unhideBtn').onclick = () => { removed = new Set(); renderPresent(); };
 $('spot').onclick = () => { $('spot').hidden = true; };
 
 /* ---------- present ---------- */
+const hasResp = qn => !!responses['q' + qn] && Object.keys(responses['q' + qn]).length > 0;
+const respList = qn => Object.entries(responses['q' + qn] || {}).map(([u, r]) => ({ u, n: students[u] ?? '?', v: r.v })).sort((a, b) => a.n - b.n);
+
+function respCard(x, answer, qn, live) {
+  let cls = 'resp';
+  if (answer) cls += isCorrect(x.v, answer) ? ' good' : ' bad';
+  const attrs = { class: cls };
+  if (live) {
+    attrs.title = 'Click to spotlight';
+    attrs.onclick = () => { $('spotNum').textContent = '#' + x.n; $('spotText').textContent = x.v; $('spot').hidden = false; };
+  }
+  return el('div', attrs,
+    live ? el('button', { class: 'x', text: '✕', title: 'Remove from board', onclick: e => { e.stopPropagation(); removed.add(qn + '|' + x.u); renderPresent(); } }) : null,
+    el('div', { class: 'n', text: '#' + x.n }),
+    el('div', { class: 'v', text: x.v })
+  );
+}
+
+function renderPast() {
+  const box = $('past');
+  box.replaceChildren();
+  if (!sess || !st) return;
+  const qns = Object.keys(sess.log).map(Number).filter(n => n !== st.qn && hasResp(n)).sort((a, b) => b - a);
+  if (!qns.length) return;
+  box.append(el('h2', { text: 'Earlier questions' }));
+  qns.forEach(qn => {
+    const q = sess.log[qn];
+    const marked = q.answer && sess.revealed && sess.revealed[qn] ? q.answer : null;
+    const card = el('div', { class: 'card' }, el('div', { class: 'pastq', text: q.text }));
+    if (marked) card.append(el('div', { class: 'pasta', text: 'Answer: ' + showAns(marked) }));
+    const g = el('div', { class: 'grid' });
+    respList(qn).filter(x => !removed.has(qn + '|' + x.u)).forEach(x => g.append(respCard(x, marked, qn, true)));
+    card.append(g);
+    box.append(card);
+  });
+}
+
 function current() {
   const rs = (st && st.qn && responses['q' + st.qn]) || {};
   const all = Object.entries(students).map(([u, n]) => ({ u, n, r: rs[u] || null })).sort((a, b) => a.n - b.n);
@@ -410,6 +456,7 @@ function renderPresent() {
 
   const asking = !!(st && st.qn);
   $('pBox').hidden = !asking;
+  renderPast();
   if (!asking) return;
   const q = sess.log[st.qn] || {};
   const { all, answered } = current();
@@ -443,28 +490,19 @@ function renderPresent() {
       ));
     });
   }
-  answered.filter(x => !removed.has(x.u)).forEach(x => {
-    let cls = 'resp';
-    if (st.answer) cls += isCorrect(x.r.v, st.answer) ? ' good' : ' bad';
-    grid.append(el('div', { class: cls, title: 'Click to spotlight', onclick: () => { $('spotNum').textContent = '#' + x.n; $('spotText').textContent = x.r.v; $('spot').hidden = false; } },
-      el('button', { class: 'x', text: '✕', title: 'Remove from board', onclick: e => { e.stopPropagation(); removed.add(x.u); renderPresent(); } }),
-      el('div', { class: 'n', text: '#' + x.n }),
-      el('div', { class: 'v', text: x.r.v })
-    ));
-  });
+  answered.filter(x => !removed.has(st.qn + '|' + x.u)).forEach(x => grid.append(respCard({ u: x.u, n: x.n, v: x.r.v }, st.answer || null, st.qn, true)));
 }
 
 /* ---------- summary ---------- */
 function renderSummary() {
   const box = $('sumList');
   box.replaceChildren();
-  const qns = sess ? Object.keys(sess.log).map(Number).sort((a, b) => a - b) : [];
-  if (!qns.length) { box.append(el('div', { class: 'card', text: 'Nothing asked yet. Each question you ask in a session will be summarised here.' })); return; }
+  const qns = sess ? Object.keys(sess.log).map(Number).filter(hasResp).sort((a, b) => a - b) : [];
+  if (!qns.length) { box.append(el('div', { class: 'card', text: 'No responses yet. Each question that gets responses in a session will be summarised here.' })); return; }
   const total = Object.keys(students).length;
   qns.forEach(qn => {
     const q = sess.log[qn];
-    const rs = responses['q' + qn] || {};
-    const list = Object.entries(rs).map(([u, r]) => ({ n: students[u] ?? '?', v: r.v }));
+    const list = respList(qn);
     const card = el('div', { class: 'card sum' }, el('h3', { text: 'Q' + qn + '. ' + q.text }));
     card.append(el('div', { class: 'hint', text: list.length + ' of ' + total + ' answered' }));
     if (q.answer) {
@@ -483,6 +521,9 @@ function renderSummary() {
     } else {
       card.append(el('div', { class: 'row hint', text: 'No set answer, so nothing to mark.' }));
     }
+    const g = el('div', { class: 'grid' });
+    list.forEach(x => g.append(respCard(x, q.answer || null, qn, false)));
+    card.append(g);
     box.append(card);
   });
 }
