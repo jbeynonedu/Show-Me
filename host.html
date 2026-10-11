@@ -126,6 +126,12 @@
     <div class="card">
       <h2>Question set</h2>
       <div class="hint">Saved in this browser, so it is still here next lesson. Correct answers only show on this tab and the Summary tab.</div>
+      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+        <button id="impBtn">Import file</button>
+        <button id="expBtn">Export</button>
+        <input type="file" id="impFile" accept=".txt,.json,text/plain,application/json" hidden>
+      </div>
+      <div id="impMsg" class="hint" style="margin-top:6px;"></div>
       <div id="qList" style="margin-top:8px;"></div>
     </div>
   </div>
@@ -305,6 +311,59 @@ function renderSetup() {
     ));
   });
 }
+
+/* ---------- import / export ---------- */
+function parseQuestions(raw) {
+  raw = raw.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
+  if (!raw) return [];
+  if (raw[0] === '[') {
+    return JSON.parse(raw).filter(q => q && typeof q.text === 'string' && q.text.trim()).map(q => {
+      const mc = q.type === 'mc' && Array.isArray(q.options) && q.options.length >= 2;
+      return { text: q.text.trim(), type: mc ? 'mc' : 'text', options: mc ? q.options.map(String) : null, answer: q.answer ? String(q.answer) : null };
+    });
+  }
+  return raw.split(/\n\s*\n/).map(block => {
+    const lines = block.split('\n').map(s => s.trim()).filter(Boolean);
+    const q = { text: lines[0] || '', type: 'text', options: null, answer: null };
+    const rest = lines.slice(1);
+    const a = rest.length === 1 && rest[0].match(/^(?:a|answer)\s*:\s*(.+)$/i);
+    if (a) q.answer = a[1].trim();
+    else if (rest.length === 1) q.text += '\n' + rest[0];
+    else if (rest.length >= 2) {
+      q.type = 'mc';
+      q.options = rest.map(l => {
+        if (l.startsWith('*')) { l = l.slice(1).trim(); q.answer = l; }
+        return l;
+      }).filter(Boolean);
+    }
+    return q;
+  }).filter(q => q.text);
+}
+
+$('impBtn').onclick = () => $('impFile').click();
+$('impFile').onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const qs = parseQuestions(await f.text());
+    if (!qs.length) throw new Error('empty');
+    const replace = questions.length > 0 && confirm('Replace the current ' + questions.length + ' question(s)?\n\nOK = replace. Cancel = add to the end.');
+    questions = replace ? qs : questions.concat(qs);
+    save(LS_Q, questions);
+    resetForm(); renderSetup(); renderPick();
+    $('impMsg').textContent = 'Imported ' + qs.length + ' question(s).';
+  } catch (err) {
+    $('impMsg').textContent = 'Could not read that file.';
+  }
+  e.target.value = '';
+};
+
+$('expBtn').onclick = () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(questions, null, 2)], { type: 'application/json' }));
+  const a = el('a', { href: url, download: 'showme-questions.json' });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
 
 /* ---------- session ---------- */
 function genCode() {
